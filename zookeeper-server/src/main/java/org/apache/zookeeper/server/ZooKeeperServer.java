@@ -621,6 +621,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         ByteBuffer to = ByteBuffer.allocate(4);
         to.putInt(timeout);
         cnxn.setSessionId(sessionId);
+        // 向处理层提交create session请求
         submitRequest(cnxn, sessionId, OpCode.createSession, 0, to, null);
         return sessionId;
     }
@@ -950,10 +951,12 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                     + " at " + cnxn.getRemoteSocketAddress());
             serverCnxnFactory.closeSession(sessionId);
             cnxn.setSessionId(sessionId);
+            // 请求中sessionId不为空，则重新打开session
             reopenSession(cnxn, sessionId, passwd, sessionTimeout);
         } else {
             LOG.info("Client attempting to establish new session at "
                     + cnxn.getRemoteSocketAddress());
+            // 第一个请求建立session
             createSession(cnxn, passwd, sessionTimeout);
         }
     }

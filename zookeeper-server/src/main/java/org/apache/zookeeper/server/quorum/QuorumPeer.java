@@ -633,9 +633,13 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     
     @Override
     public synchronized void start() {
+        // 从磁盘snapshot和txnlog恢复出内存的文件树，然后检查/更新了currentEpoch、acceptedEpoch文件
         loadDataBase();
-        cnxnFactory.start();        
+        // 启动了内部处理客户端连接的select事件循环
+        cnxnFactory.start();
+        // 开始选举
         startLeaderElection();
+        // 启动核心循环
         super.start();
     }
 
@@ -643,13 +647,18 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
         File updating = new File(getTxnFactory().getSnapDir(),
                                  UPDATING_EPOCH_FILENAME);
 		try {
+		    // 从txnlog和snapshot中恢复整颗文件树
             zkDb.loadDataBase();
 
             // load the epochs
+            // 获取文件树最后的zxid
             long lastProcessedZxid = zkDb.getDataTree().lastProcessedZxid;
+            // 根据zxid获取前32位得到epoch
     		long epochOfZxid = ZxidUtils.getEpochFromZxid(lastProcessedZxid);
             try {
+                // 读snapDir下的本地文件currentEpoch拿到currentEpoch
             	currentEpoch = readLongFromFile(CURRENT_EPOCH_FILENAME);
+            	// 如果currentEpoch不是最新的，更新本地文件
                 if (epochOfZxid > currentEpoch && updating.exists()) {
                     LOG.info("{} found. The server was terminated after " +
                              "taking a snapshot but before updating current " +
@@ -665,12 +674,14 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             	// pick a reasonable epoch number
             	// this should only happen once when moving to a
             	// new code version
+                // currentEpoch文件没找到就写一个到本地
             	currentEpoch = epochOfZxid;
             	LOG.info(CURRENT_EPOCH_FILENAME
             	        + " not found! Creating with a reasonable default of {}. This should only happen when you are upgrading your installation",
             	        currentEpoch);
             	writeLongToFile(CURRENT_EPOCH_FILENAME, currentEpoch);
             }
+            // 理论上上面更新了，这里不可能出现这个情况了
             if (epochOfZxid > currentEpoch) {
             	throw new IOException("The current epoch, " + ZxidUtils.zxidToString(currentEpoch) + ", is older than the last zxid, " + lastProcessedZxid);
             }
@@ -703,12 +714,14 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     }
     synchronized public void startLeaderElection() {
     	try {
+    	    // 可以看到选票由当前服务器id、当前服务器最新zxid，当前服务器的epoch构成
     		currentVote = new Vote(myid, getLastLoggedZxid(), getCurrentEpoch());
     	} catch(IOException e) {
     		RuntimeException re = new RuntimeException(e.getMessage());
     		re.setStackTrace(e.getStackTrace());
     		throw re;
     	}
+    	// 正常情况都是electionType=3，下面这段逻辑到if (electionType == 0) 内都弃用了
         for (QuorumServer p : getView().values()) {
             if (p.id == myid) {
                 myQuorumAddr = p.addr;
@@ -727,6 +740,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                 throw new RuntimeException(e);
             }
         }
+        // 内部就是启动了QuorumCnxManager，并返回了FastLeaderElection
         this.electionAlg = createElectionAlgorithm(electionType);
     }
     
@@ -825,7 +839,10 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             qcm = createCnxnManager();
             QuorumCnxManager.Listener listener = qcm.listener;
             if(listener != null){
+                // 启动内部选举的阻塞式IO accept线程，其实就是一般配置监听的3888
+                // 建立连接后，创建SendWorker、RecvWorker两个线程分别处理读写请求
                 listener.start();
+                // 创建WorkerSender、WorkerReceiver两个线程
                 le = new FastLeaderElection(this, qcm);
             } else {
                 LOG.error("Null listener when initializing cnx manager");
@@ -873,6 +890,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                 cnxnFactory.getLocalAddress());
 
         LOG.debug("Starting quorum peer");
+        // 初始化一些监控MBean
         try {
             jmxQuorumBean = new QuorumBean(this);
             MBeanRegistry.getInstance().register(jmxQuorumBean, null);

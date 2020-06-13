@@ -165,6 +165,7 @@ public class NIOServerCnxn extends ServerCnxn {
         if (incomingBuffer.remaining() == 0) { // have we read length bytes?
             packetReceived();
             incomingBuffer.flip();
+            // 没初始化第一个请求肯定是初始化
             if (!initialized) {
                 readConnectRequest();
             } else {
@@ -397,10 +398,12 @@ public class NIOServerCnxn extends ServerCnxn {
     protected void incrOutstandingRequests(RequestHeader h) {
         if (h.getXid() >= 0) {
             synchronized (this) {
+                // 当前连接的outstandingRequests
                 outstandingRequests++;
             }
             synchronized (this.factory) {        
                 // check throttling
+                // 这里是全局的
                 if (zkServer.getInProcess() > outstandingLimit) {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("Throttling recv " + zkServer.getInProcess());

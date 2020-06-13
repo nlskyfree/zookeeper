@@ -482,11 +482,14 @@ public class QuorumCnxManager {
              * Now we start a new connection
              */
             LOG.debug("Create new connection to server: " + sid);
+            // 关闭对端连接
             closeSocket(sock);
+            // 向对端发送一个连接，并将自身的sid发送到对端
             connectOne(sid);
 
             // Otherwise start worker threads to receive data.
         } else {
+            // 分别启动两个线程负责读写
             SendWorker sw = new SendWorker(sock, sid);
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
@@ -565,6 +568,7 @@ public class QuorumCnxManager {
                 if (quorumSaslAuthEnabled) {
                     initiateConnectionAsync(sock, sid);
                 } else {
+                    // 初始化连接并发送当前进程的id给对端
                     initiateConnection(sock, sid);
                 }
             } catch (UnresolvedAddressException e) {
@@ -738,6 +742,7 @@ public class QuorumCnxManager {
                             .electionAddr.toString());
                     ss.bind(addr);
                     while (!shutdown) {
+                        // 注意这里是阻塞式IO
                         Socket client = ss.accept();
                         setSockOpts(client);
                         LOG.info("Received connection request "

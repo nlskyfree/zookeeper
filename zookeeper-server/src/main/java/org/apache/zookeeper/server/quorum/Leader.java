@@ -391,6 +391,7 @@ public class Leader {
 
             // Start thread that waits for connection requests from 
             // new followers.
+            // leader服务器会创建此线程，用于监听2888端口，获取连接，用于leader和learner之间的网络通信
             cnxAcceptor = new LearnerCnxAcceptor();
             cnxAcceptor.start();
             

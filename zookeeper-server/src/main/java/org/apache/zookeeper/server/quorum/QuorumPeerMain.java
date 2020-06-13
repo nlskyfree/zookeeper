@@ -130,7 +130,10 @@ public class QuorumPeerMain {
   
       LOG.info("Starting quorum peer");
       try {
+          // 默认为NIOServerCnxnFactory
           ServerCnxnFactory cnxnFactory = ServerCnxnFactory.createFactory();
+          // 初始化监听socket，设置为非阻塞模式，selector注册accept事件
+          // 后续内部线程启动时,其实就是个select事件循环
           cnxnFactory.configure(config.getClientPortAddress(),
                                 config.getMaxClientCnxns());
 
@@ -140,6 +143,7 @@ public class QuorumPeerMain {
           quorumPeer.setTxnFactory(new FileTxnSnapLog(
                   new File(config.getDataLogDir()),
                   new File(config.getDataDir())));
+          // 选举算法，默认为FastLeaderElection
           quorumPeer.setElectionType(config.getElectionAlg());
           quorumPeer.setMyid(config.getServerId());
           quorumPeer.setTickTime(config.getTickTime());
@@ -151,6 +155,7 @@ public class QuorumPeerMain {
           quorumPeer.setClientPortAddress(config.getClientPortAddress());
           quorumPeer.setMinSessionTimeout(config.getMinSessionTimeout());
           quorumPeer.setMaxSessionTimeout(config.getMaxSessionTimeout());
+          // ZKDatabase就是对文件树访问的封装
           quorumPeer.setZKDatabase(new ZKDatabase(quorumPeer.getTxnFactory()));
           quorumPeer.setLearnerType(config.getPeerType());
           quorumPeer.setSyncEnabled(config.getSyncEnabled());
@@ -166,9 +171,11 @@ public class QuorumPeerMain {
           }
 
           quorumPeer.setQuorumCnxnThreadsSize(config.quorumCnxnThreadsSize);
+          // 如果不配置sasl，其实啥也没做
           quorumPeer.initialize();
-
+          // 启动核心逻辑
           quorumPeer.start();
+          // 主线程阻塞，直至quorumPeer线程退出，quorumPeer线程内运行着核心循环
           quorumPeer.join();
       } catch (InterruptedException e) {
           // warn, but generally this is ok
