@@ -209,6 +209,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory implements Runnable 
                         selected);
                 Collections.shuffle(selectedList);
                 for (SelectionKey k : selectedList) {
+                    // 处理连接事件
                     if ((k.readyOps() & SelectionKey.OP_ACCEPT) != 0) {
                         SocketChannel sc = ((ServerSocketChannel) k
                                 .channel()).accept();
@@ -225,11 +226,14 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory implements Runnable 
                             SelectionKey sk = sc.register(selector,
                                     SelectionKey.OP_READ);
                             NIOServerCnxn cnxn = createConnection(sc, sk);
+                            // 每个连接
                             sk.attach(cnxn);
                             addCnxn(cnxn);
                         }
                     } else if ((k.readyOps() & (SelectionKey.OP_READ | SelectionKey.OP_WRITE)) != 0) {
+                        // 注意这里很关键，每个连接有自己的NIOServerCnxn，这样能区分是哪个连接来数据，这样内部读写缓冲区就不会复用错
                         NIOServerCnxn c = (NIOServerCnxn) k.attachment();
+                        // 处理读写事件
                         c.doIO(k);
                     } else {
                         if (LOG.isDebugEnabled()) {

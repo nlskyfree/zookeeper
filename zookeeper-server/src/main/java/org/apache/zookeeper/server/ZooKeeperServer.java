@@ -721,11 +721,13 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
      */
     private void submitRequest(ServerCnxn cnxn, long sessionId, int type,
             int xid, ByteBuffer bb, List<Id> authInfo) {
+        // 根据网络层的二进制数据组成责任链接口的请求，相当于进入处理层
         Request si = new Request(cnxn, sessionId, xid, type, bb, authInfo);
         submitRequest(si);
     }
     
     public void submitRequest(Request si) {
+        // firstProcessor为空说明正在启动没初始化完，等待直至初始化完成
         if (firstProcessor == null) {
             synchronized (this) {
                 try {
@@ -745,15 +747,19 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             }
         }
         try {
+            // session判活
             touch(si.cnxn);
             boolean validpacket = Request.isValid(si.type);
             if (validpacket) {
+                // 提交到处理责任链
                 firstProcessor.processRequest(si);
                 if (si.cnxn != null) {
+                    // outstanding request计数，责任链走完准备发response时，则认为处理完
                     incInProcess();
                 }
             } else {
                 LOG.warn("Received packet at server of unknown type " + si.type);
+                // 无效包，使用UnimplementedRequestProcessor处理器回复
                 new UnimplementedRequestProcessor().processRequest(si);
             }
         } catch (MissingSessionException e) {
@@ -1018,6 +1024,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                 return;
             }
             else {
+                // 根据网络层的二进制数据Packet组成责任链接口的请求Request，相当于进入处理层
                 Request si = new Request(cnxn, cnxn.getSessionId(), h.getXid(),
                   h.getType(), incomingBuffer, cnxn.getAuthInfo());
                 si.setOwner(ServerCnxn.me);

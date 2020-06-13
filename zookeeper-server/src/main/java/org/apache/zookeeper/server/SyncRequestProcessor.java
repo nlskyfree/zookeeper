@@ -124,8 +124,10 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
             while (true) {
                 Request si = null;
                 if (toFlush.isEmpty()) {
+                    // 从请求队列中取出一个请求，若队列为空会阻塞
                     si = queuedRequests.take();
                 } else {
+                    // 从请求队列中取出一个请求，若队列为空，则返回空，不会阻塞
                     si = queuedRequests.poll();
                     if (si == null) {
                         flush(toFlush);

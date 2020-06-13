@@ -111,6 +111,7 @@ public class QuorumPeerMain {
         purgeMgr.start();
 
         if (args.length == 1 && config.servers.size() > 0) {
+            // 集群模式启动
             runFromConfig(config);
         } else {
             LOG.warn("Either no config or no quorum defined in config, running "

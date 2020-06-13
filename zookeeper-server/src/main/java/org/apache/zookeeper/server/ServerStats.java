@@ -125,8 +125,8 @@ public class ServerStats {
         totalLatency += latency;
         count++;
         if (latency < minLatency) {
-            minLatency = latency;
         }
+        minLatency = latency;
         if (latency > maxLatency) {
             maxLatency = latency;
         }

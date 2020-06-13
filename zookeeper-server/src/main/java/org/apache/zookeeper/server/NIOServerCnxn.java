@@ -150,6 +150,31 @@ public class NIOServerCnxn extends ServerCnxn {
         }
     }
 
+    /** Read the request payload (everything following the length prefix) */
+    private void readPayload() throws IOException, InterruptedException {
+        if (incomingBuffer.remaining() != 0) { // have we read length bytes?
+            int rc = sock.read(incomingBuffer); // sock is non-blocking, so ok
+            if (rc < 0) {
+                throw new EndOfStreamException(
+                        "Unable to read additional data from client sessionid 0x"
+                                + Long.toHexString(sessionId)
+                                + ", likely client has closed socket");
+            }
+        }
+
+        if (incomingBuffer.remaining() == 0) { // have we read length bytes?
+            packetReceived();
+            incomingBuffer.flip();
+            if (!initialized) {
+                readConnectRequest();
+            } else {
+                readRequest();
+            }
+            lenBuffer.clear();
+            incomingBuffer = lenBuffer;
+        }
+    }
+
     /**
      * This method implements the internals of sendBuffer. We
      * have separated it from send buffer to be able to catch
@@ -187,31 +212,6 @@ public class NIOServerCnxn extends ServerCnxn {
             if (sk.isValid()) {
                 sk.interestOps(sk.interestOps() | SelectionKey.OP_WRITE);
             }
-        }
-    }
-
-    /** Read the request payload (everything following the length prefix) */
-    private void readPayload() throws IOException, InterruptedException {
-        if (incomingBuffer.remaining() != 0) { // have we read length bytes?
-            int rc = sock.read(incomingBuffer); // sock is non-blocking, so ok
-            if (rc < 0) {
-                throw new EndOfStreamException(
-                        "Unable to read additional data from client sessionid 0x"
-                        + Long.toHexString(sessionId)
-                        + ", likely client has closed socket");
-            }
-        }
-
-        if (incomingBuffer.remaining() == 0) { // have we read length bytes?
-            packetReceived();
-            incomingBuffer.flip();
-            if (!initialized) {
-                readConnectRequest();
-            } else {
-                readRequest();
-            }
-            lenBuffer.clear();
-            incomingBuffer = lenBuffer;
         }
     }
 
@@ -254,6 +254,7 @@ public class NIOServerCnxn extends ServerCnxn {
                     boolean isPayload;
                     if (incomingBuffer == lenBuffer) { // start of next request
                         incomingBuffer.flip();
+                        // true则前4个字节为payload大小，false说明为4字命令
                         isPayload = readLength(k);
                         incomingBuffer.clear();
                     } else {

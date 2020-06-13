@@ -18,7 +18,7 @@
 
 package org.apache.zookeeper;
 
-public class Version implements org.apache.zookeeper.version.Info {
+public class Version  {
 
     /*
      * Since the SVN to Git port this field doesn't return the revision anymore
@@ -28,20 +28,19 @@ public class Version implements org.apache.zookeeper.version.Info {
      */
     @Deprecated
     public static int getRevision() {
-        return REVISION;
+        return -1;
     }
 
     public static String getRevisionHash() {
-        return REVISION_HASH;
+        return "1";
     }
 
     public static String getBuildDate() {
-        return BUILD_DATE;
+        return "2020-6-12";
     }
 
     public static String getVersion() {
-        return MAJOR + "." + MINOR + "." + MICRO
-            + (QUALIFIER == null ? "" : "-" + QUALIFIER);
+        return 3 + "." + 4 + "." + 6;
     }
 
     public static String getVersionRevision() {

@@ -324,7 +324,8 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
         switch (type) {
             case OpCode.create:                
                 zks.sessionTracker.checkSession(request.sessionId, request.getOwner());
-                CreateRequest createRequest = (CreateRequest)record;   
+                CreateRequest createRequest = (CreateRequest)record;
+                // 反序列化，将ByteBuffer转化为Record
                 if(deserialize)
                     ByteBufferInputStream.byteBuffer2Record(request.request, createRequest);
                 String path = createRequest.getPath();
@@ -532,7 +533,8 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
         // request.type + " id = 0x" + Long.toHexString(request.sessionId));
         request.hdr = null;
         request.txn = null;
-        
+        // 这里根据请求的不同类型对请求做验证，如对创建节点而言，其会进行会话验证，ACL列表验证，节点路径验证及判断创建节点的类型（顺序节点、临时节点等）而进行不同操作，
+        // 同时还会使父节点的子节点数目加1，之后会再调用addChangeRecord函数将ChangeRecord添加至ZooKeeperServer的outstandingChanges和outstandingChangesForPath中
         try {
             switch (request.type) {
                 case OpCode.create:
@@ -677,7 +679,9 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
                 request.txn = new ErrorTxn(Code.MARSHALLINGERROR.intValue());
             }
         }
+        // 给请求赋zxid
         request.zxid = zks.getZxid();
+        // 传递给下个处理器进行处理
         nextProcessor.processRequest(request);
     }
 
