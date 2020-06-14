@@ -637,7 +637,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
         loadDataBase();
         // 启动了内部处理客户端连接的select事件循环
         cnxnFactory.start();
-        // 开始选举
+        // 初始化选举算法、相关线程
         startLeaderElection();
         // 启动核心循环
         super.start();

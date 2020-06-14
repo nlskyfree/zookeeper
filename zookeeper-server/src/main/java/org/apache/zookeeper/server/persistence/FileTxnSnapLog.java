@@ -192,7 +192,7 @@ public class FileTxnSnapLog {
     public long fastForwardFromEdits(DataTree dt, Map<Long, Integer> sessions,
                                      PlayBackListener listener) throws IOException {
         FileTxnLog txnLog = new FileTxnLog(dataDir);
-        // 拿到待恢复的事务日志文件的迭代器
+        // 从最新的日志文件往回找，直到找到txnLog文件中存有dt.lastProcessedZxid+1事务日志的文件，然后返回迭代器（可能迭代多个文件）
         TxnIterator itr = txnLog.read(dt.lastProcessedZxid+1);
         long highestZxid = dt.lastProcessedZxid;
         TxnHeader hdr;
@@ -221,7 +221,7 @@ public class FileTxnSnapLog {
                 }
                 // 通知监听器回放事件发生
                 listener.onTxnLoaded(hdr, itr.getTxn());
-                // 取下一条事务日志
+                // 取下一条事务日志，注意：这里EOFException是正常流程的一环，会回放多个log文件
                 if (!itr.next()) 
                     break;
             }
@@ -302,6 +302,7 @@ public class FileTxnSnapLog {
     public void save(DataTree dataTree,
             ConcurrentHashMap<Long, Integer> sessionsWithTimeouts)
         throws IOException {
+        // 注意：snap名称这个zxid只代表开始snapshot时的最大zxid，中间有可能又有数据写入
         long lastZxid = dataTree.lastProcessedZxid;
         File snapshotFile = new File(snapDir, Util.makeSnapshotName(lastZxid));
         LOG.info("Snapshotting: 0x{} to {}", Long.toHexString(lastZxid),

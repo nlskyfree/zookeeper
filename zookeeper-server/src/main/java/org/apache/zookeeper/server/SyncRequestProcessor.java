@@ -130,6 +130,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                     // 从请求队列中取出一个请求，若队列为空，则返回空，不会阻塞
                     si = queuedRequests.poll();
                     if (si == null) {
+                        // 缓冲一批一起刷盘
                         flush(toFlush);
                         continue;
                     }
@@ -143,12 +144,13 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                         logCount++;
                         if (logCount > (snapCount / 2 + randRoll)) {
                             setRandRoll(r.nextInt(snapCount/2));
-                            // roll the log
+                            // roll the log，注意这里说明是有可能log roll了2次，但snapshot还是只有一个的情况
                             zks.getZKDatabase().rollLog();
                             // take a snapshot
                             if (snapInProcess != null && snapInProcess.isAlive()) {
                                 LOG.warn("Too busy to snap, skipping");
                             } else {
+                                // 异步线程进行快照
                                 snapInProcess = new ZooKeeperThread("Snapshot Thread") {
                                         public void run() {
                                             try {
@@ -176,6 +178,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                         continue;
                     }
                     toFlush.add(si);
+                    // toFlush过大了也flush一批
                     if (toFlush.size() > 1000) {
                         flush(toFlush);
                     }
@@ -197,6 +200,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         zks.getZKDatabase().commit();
         while (!toFlush.isEmpty()) {
             Request i = toFlush.remove();
+            // 确保commit刷盘后才调用nextProcessor
             if (nextProcessor != null) {
                 nextProcessor.processRequest(i);
             }

@@ -836,6 +836,10 @@ public class DataTree {
          * case where the snapshot contains data ahead of the zxid associated
          * with the file.
          */
+        // 处理完事务后，再修改最新Zxid，如果是先修改Zxid再处理事务
+        // 可能修改完Zxid后，正好异步线程flush datatree，那么snapshot的zxid较大，而datatree此时还没更新最新内容，会不对应
+        // 为了避免这种情况，则先修改内容，再修改zxid，而在restore snapshot时兼容内容超前于zxid的情况
+        // 个人觉得就是保证事务操作时幂等的，所以内容领先，事务id落后，重放一遍没有影响
         if (rc.zxid > lastProcessedZxid) {
         	lastProcessedZxid = rc.zxid;
         }

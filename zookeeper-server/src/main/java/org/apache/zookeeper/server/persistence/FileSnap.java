@@ -110,7 +110,7 @@ public class FileSnap implements SnapShot {
         if (!foundValid) {
             throw new IOException("Not able to find valid snapshots in " + snapDir);
         }
-        // 通过snapshot名称拿到lastProcessedZxid
+        // 通过snapshot名称拿到lastProcessedZxid（why？我理解snapshot中有可能有比名称大的zxid存在）
         dt.lastProcessedZxid = Util.getZxidFromName(snap.getName(), SNAPSHOT_FILE_PREFIX);
         return dt.lastProcessedZxid;
     }

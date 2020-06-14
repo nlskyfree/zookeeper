@@ -196,6 +196,7 @@ public class FileTxnLog implements TxnLog {
      * @param txn the transaction part of the entry
      * returns true iff something appended, otw false 
      */
+    // 注意这里并没有保证txnLog落盘了，可能只写入了pagecache，会在调用commit时刷盘
     public synchronized boolean append(TxnHeader hdr, Record txn)
         throws IOException
     {
@@ -210,16 +211,17 @@ public class FileTxnLog implements TxnLog {
         } else {
             lastZxidSeen = hdr.getZxid();
         }
-
+        // 产生新log文件
         if (logStream==null) {
            if(LOG.isInfoEnabled()){
                 LOG.info("Creating new log file: " + Util.makeLogName(hdr.getZxid()));
            }
-
+           // txnLog文件名为第一条txnLog的zxid
            logFileWrite = new File(logDir, Util.makeLogName(hdr.getZxid()));
            fos = new FileOutputStream(logFileWrite);
            logStream=new BufferedOutputStream(fos);
            oa = BinaryOutputArchive.getArchive(logStream);
+           // 写入txnLog文件FileHeader
            FileHeader fhdr = new FileHeader(TXNLOG_MAGIC,VERSION, dbId);
            fhdr.serialize(oa, "fileheader");
            // Make sure that the magic number is written before padding.
@@ -227,15 +229,19 @@ public class FileTxnLog implements TxnLog {
            filePadding.setCurrentSize(fos.getChannel().position());
            streamsToFlush.add(fos);
         }
+        // 提前填充磁盘文件，剩余空间<4kb，再自动扩容
         filePadding.padFile(fos.getChannel());
+        // 本次txn的header和record先写入一个二进制数组，方便后续计算crc
         byte[] buf = Util.marshallTxnEntry(hdr, txn);
         if (buf == null || buf.length == 0) {
             throw new IOException("Faulty serialization for header " +
                     "and txn");
         }
         Checksum crc = makeChecksumAlgorithm();
+        // 计算buf的crc并先写入crc
         crc.update(buf, 0, buf.length);
         oa.writeLong(crc.getValue(), "txnEntryCRC");
+        // 写入一个txn Entry
         Util.writeTxnBytes(oa, buf);
 
         return true;
@@ -329,7 +335,7 @@ public class FileTxnLog implements TxnLog {
             log.flush();
             if (forceSync) {
                 long startSyncNS = System.nanoTime();
-
+                // 调用fsync( )保证强制刷盘
                 log.getChannel().force(false);
 
                 long syncElapsedMS =
@@ -544,22 +550,24 @@ public class FileTxnLog implements TxnLog {
             List<File> files = Util.sortDataDir(FileTxnLog.getLogFiles(logDir.listFiles(), 0), LOG_FILE_PREFIX, false);
             // 倒序获取所有日志文件
             for (File f: files) {
-                // 获取日志文件名称上的zxid比snapshot最大zxid要大的日志文件
+                // 获取日志文件名称上的zxid比snapshot名称的zxid要大的日志文件
                 if (Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX) >= zxid) {
                     storedFiles.add(f);
                 }
                 // add the last logfile that is less than the zxid
                 else if (Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX) < zxid) {
                     // 找到第一个比snapshot小的，存下来，然后退出循环
+                    // 因为txnLog存的是第一条数据的zxid，因此这个文件就是最后一个可能存有比snapshot的zxid大的txnLog的文件
                     storedFiles.add(f);
                     break;
                 }
             }
-            // storedFiles移除第一个（即最新的日志文件），并获取其io流
+            // storedFiles获取最后一个（即恢复的起点），并获取其io流
             goToNextLog();
             if (!next())
                 return;
-            // 确保解析出来的zxid要大于snapshot的最大zxid
+            // 恢复的起点文件，文件中可能会有比zxid大的，也可能有比他小的，因此一直遍历到文件直到zxid要大的那行记录。
+            // 则后面都是需要回放的事务日志
             while (hdr.getZxid() < zxid) {
                 if (!next())
                     return;
@@ -574,7 +582,7 @@ public class FileTxnLog implements TxnLog {
          */
         private boolean goToNextLog() throws IOException {
             if (storedFiles.size() > 0) {
-                // 取列表中第一个，创建读取的io流
+                // 取列表中最后一个，创建读取的io流
                 this.logFile = storedFiles.remove(storedFiles.size()-1);
                 ia = createInputArchive(this.logFile);
                 return true;
