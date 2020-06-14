@@ -289,6 +289,7 @@ public class NIOServerCnxn extends ServerCnxn {
                      * with data from the non-direct buffers that we need to
                      * send.
                      */
+                    // 这里就是专门弄了个directBuffer，用来加速向socket发送数据（有效果吗？）
                     ByteBuffer directBuffer = factory.directBuffer;
                     directBuffer.clear();
 
@@ -321,11 +322,12 @@ public class NIOServerCnxn extends ServerCnxn {
                      * 0. This sets us up for the write.
                      */
                     directBuffer.flip();
-
+                    // 实际发送数据
                     int sent = sock.write(directBuffer);
                     ByteBuffer bb;
 
                     // Remove the buffers that we have sent
+                    // 循环检查，直到发现有一个buffer发送了一部分数据或者发现outgoingBuffers的数据全发完了
                     while (outgoingBuffers.size() > 0) {
                         bb = outgoingBuffers.peek();
                         if (bb == ServerCnxnFactory.closeConn) {
@@ -352,6 +354,7 @@ public class NIOServerCnxn extends ServerCnxn {
 
                 synchronized(this.factory){
                     if (outgoingBuffers.size() == 0) {
+                        // 没有数据需要发送，JAVA NIO是ET模式，因此写完了就要取消掉socket上的可写事件
                         if (!initialized
                                 && (sk.interestOps() & SelectionKey.OP_READ) == 0) {
                             throw new CloseRequestException("responded to info probe");
@@ -359,6 +362,7 @@ public class NIOServerCnxn extends ServerCnxn {
                         sk.interestOps(sk.interestOps()
                                 & (~SelectionKey.OP_WRITE));
                     } else {
+                        // 有数据需要写时才注册OP_WRITE事件
                         sk.interestOps(sk.interestOps()
                                 | SelectionKey.OP_WRITE);
                     }

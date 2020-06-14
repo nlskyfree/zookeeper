@@ -72,6 +72,7 @@ public class FileSnap implements SnapShot {
         // we run through 100 snapshots (not all of them)
         // if we cannot get it running within 100 snapshots
         // we should  give up
+        // 找到前100个有效的snapshot
         List<File> snapList = findNValidSnapshots(100);
         if (snapList.size() == 0) {
             return -1L;
@@ -88,11 +89,13 @@ public class FileSnap implements SnapShot {
                 crcIn = new CheckedInputStream(snapIS, new Adler32());
                 InputArchive ia = BinaryInputArchive.getArchive(crcIn);
                 deserialize(dt,sessions, ia);
+                // crc校验
                 long checkSum = crcIn.getChecksum().getValue();
                 long val = ia.readLong("val");
                 if (val != checkSum) {
                     throw new IOException("CRC corruption in snapshot :  " + snap);
                 }
+                // 找到一个有效的就退出
                 foundValid = true;
                 break;
             } catch(IOException e) {
@@ -107,6 +110,7 @@ public class FileSnap implements SnapShot {
         if (!foundValid) {
             throw new IOException("Not able to find valid snapshots in " + snapDir);
         }
+        // 通过snapshot名称拿到lastProcessedZxid
         dt.lastProcessedZxid = Util.getZxidFromName(snap.getName(), SNAPSHOT_FILE_PREFIX);
         return dt.lastProcessedZxid;
     }

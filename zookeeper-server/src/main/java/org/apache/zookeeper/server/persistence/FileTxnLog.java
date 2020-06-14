@@ -542,19 +542,24 @@ public class FileTxnLog implements TxnLog {
         void init() throws IOException {
             storedFiles = new ArrayList<File>();
             List<File> files = Util.sortDataDir(FileTxnLog.getLogFiles(logDir.listFiles(), 0), LOG_FILE_PREFIX, false);
+            // 倒序获取所有日志文件
             for (File f: files) {
+                // 获取日志文件名称上的zxid比snapshot最大zxid要大的日志文件
                 if (Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX) >= zxid) {
                     storedFiles.add(f);
                 }
                 // add the last logfile that is less than the zxid
                 else if (Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX) < zxid) {
+                    // 找到第一个比snapshot小的，存下来，然后退出循环
                     storedFiles.add(f);
                     break;
                 }
             }
+            // storedFiles移除第一个（即最新的日志文件），并获取其io流
             goToNextLog();
             if (!next())
                 return;
+            // 确保解析出来的zxid要大于snapshot的最大zxid
             while (hdr.getZxid() < zxid) {
                 if (!next())
                     return;
@@ -569,6 +574,7 @@ public class FileTxnLog implements TxnLog {
          */
         private boolean goToNextLog() throws IOException {
             if (storedFiles.size() > 0) {
+                // 取列表中第一个，创建读取的io流
                 this.logFile = storedFiles.remove(storedFiles.size()-1);
                 ia = createInputArchive(this.logFile);
                 return true;
@@ -636,6 +642,7 @@ public class FileTxnLog implements TxnLog {
                 }
                 // EOF or corrupted record
                 // validate CRC
+                // CRC文件校验
                 Checksum crc = makeChecksumAlgorithm();
                 crc.update(bytes, 0, bytes.length);
                 if (crcValue != crc.getValue())

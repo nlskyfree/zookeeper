@@ -647,7 +647,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
         File updating = new File(getTxnFactory().getSnapDir(),
                                  UPDATING_EPOCH_FILENAME);
 		try {
-		    // 从txnlog和snapshot中恢复整颗文件树
+		    // snapshot和txnlog中恢复整颗文件树和session会话信息
             zkDb.loadDataBase();
 
             // load the epochs

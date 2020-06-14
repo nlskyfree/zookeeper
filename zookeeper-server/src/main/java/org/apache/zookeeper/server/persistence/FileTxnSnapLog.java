@@ -172,7 +172,9 @@ public class FileTxnSnapLog {
      */
     public long restore(DataTree dt, Map<Long, Integer> sessions, 
             PlayBackListener listener) throws IOException {
+        // 读取最新的snapshot并恢复sessions<sessionId, timeout>
         snapLog.deserialize(dt, sessions);
+        // dt恢复到最新的snapshot后回放一遍事务日志，返回最大的zxid
         return fastForwardFromEdits(dt, sessions, listener);
     }
 
@@ -190,6 +192,7 @@ public class FileTxnSnapLog {
     public long fastForwardFromEdits(DataTree dt, Map<Long, Integer> sessions,
                                      PlayBackListener listener) throws IOException {
         FileTxnLog txnLog = new FileTxnLog(dataDir);
+        // 拿到待恢复的事务日志文件的迭代器
         TxnIterator itr = txnLog.read(dt.lastProcessedZxid+1);
         long highestZxid = dt.lastProcessedZxid;
         TxnHeader hdr;
@@ -210,12 +213,15 @@ public class FileTxnSnapLog {
                     highestZxid = hdr.getZxid();
                 }
                 try {
+                    // 回放事务日志
                     processTransaction(hdr,dt,sessions, itr.getTxn());
                 } catch(KeeperException.NoNodeException e) {
                    throw new IOException("Failed to process transaction type: " +
                          hdr.getType() + " error: " + e.getMessage(), e);
                 }
+                // 通知监听器回放事件发生
                 listener.onTxnLoaded(hdr, itr.getTxn());
+                // 取下一条事务日志
                 if (!itr.next()) 
                     break;
             }

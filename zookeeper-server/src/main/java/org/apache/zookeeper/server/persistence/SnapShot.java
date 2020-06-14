@@ -38,7 +38,7 @@ public interface SnapShot {
      * @return the last zxid that was deserialized from the snapshot
      * @throws IOException
      */
-    long deserialize(DataTree dt, Map<Long, Integer> sessions) 
+    long deserialize(DataTree dt, Map<Long, Integer> sessions)
         throws IOException;
     
     /**
