@@ -858,6 +858,7 @@ public class DataTree {
          * Note, such failures on DT should be seen only during
          * restore.
          */
+        // 上述的问题，parent版本会不对，这里做补偿（感觉update重复2次也有版本问题？）
         if (header.getType() == OpCode.create &&
                 rc.err == Code.NODEEXISTS.intValue()) {
             LOG.debug("Adjusting parent cversion for Txn: " + header.getType() +
