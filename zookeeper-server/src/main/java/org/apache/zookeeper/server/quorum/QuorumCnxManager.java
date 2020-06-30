@@ -70,7 +70,7 @@ import org.slf4j.LoggerFactory;
  * when consolidating peer communication. This is to be verified, though.
  * 
  */
-
+// Quorum内部选举连接的管理器
 public class QuorumCnxManager {
     private static final Logger LOG = LoggerFactory.getLogger(QuorumCnxManager.class);
 
@@ -124,12 +124,15 @@ public class QuorumCnxManager {
      * Mapping from Peer to Thread number
      */
     final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;
+    // sid -> buffer queue（大小默认为1），为每个参与投票的server都保留一个队列
     final ConcurrentHashMap<Long, ArrayBlockingQueue<ByteBuffer>> queueSendMap;
+    // 记录给sid发送的最后一条消息
     final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
 
     /*
      * Reception queue
      */
+    // 所有收到的消息放入recvQueue中
     public final ArrayBlockingQueue<Message> recvQueue;
     /*
      * Object to synchronize access to recvQueue
@@ -519,6 +522,7 @@ public class QuorumCnxManager {
          */
         if (this.mySid == sid) {
              b.position(0);
+             // 如果是发给自己的，直接装入本地的recvQueue
              addToRecvQueue(new Message(b.duplicate(), sid));
             /*
              * Otherwise send to the corresponding thread to send.
@@ -528,12 +532,14 @@ public class QuorumCnxManager {
               * Start a new connection if doesn't have one already.
               */
              ArrayBlockingQueue<ByteBuffer> bq = new ArrayBlockingQueue<ByteBuffer>(SEND_CAPACITY);
+             // 其实就是构建queueSendMap，对于每个对端sid，如果是3个zk集群，则map应该是2项，queue其实大小只有1
              ArrayBlockingQueue<ByteBuffer> bqExisting = queueSendMap.putIfAbsent(sid, bq);
              if (bqExisting != null) {
                  addToSendQueue(bqExisting, b);
              } else {
                  addToSendQueue(bq, b);
              }
+             // 尝试连接对端
              connectOne(sid);
                 
         }
@@ -1012,6 +1018,7 @@ public class QuorumCnxManager {
                      * Reads the first int to determine the length of the
                      * message
                      */
+                    // 阻塞式IO，头4个字节代表这个数据包大小
                     int length = din.readInt();
                     if (length <= 0 || length > PACKETMAXSIZE) {
                         throw new IOException(
@@ -1021,6 +1028,7 @@ public class QuorumCnxManager {
                     /**
                      * Allocates a new ByteBuffer to receive the message
                      */
+                    // 知道大小后继续读指定数据得到message，得到后加入recvQueue
                     byte[] msgArray = new byte[length];
                     din.readFully(msgArray, 0, length);
                     ByteBuffer message = ByteBuffer.wrap(msgArray);
@@ -1059,6 +1067,7 @@ public class QuorumCnxManager {
      */
     private void addToSendQueue(ArrayBlockingQueue<ByteBuffer> queue,
           ByteBuffer buffer) {
+        // queue大小为1，如果queue已经消息了，移除这条消息替换为新消息
         if (queue.remainingCapacity() == 0) {
             try {
                 queue.remove();

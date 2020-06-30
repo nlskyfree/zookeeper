@@ -835,7 +835,7 @@ public class FastLeaderElection implements Election {
                     if(manager.haveDelivered()){
                         sendNotifications();
                     } else {
-                        // 使得服务器之间建立连接
+                        // 建立选举通道，使得配置的peer间建立一个tcp长连接专门用于选举
                         manager.connectAll();
                     }
 

@@ -923,6 +923,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
              * Main loop
              */
             while (running) {
+                // 刚启动都是LOOKING，选举成功的成为LEADER，其它成为FOLLOWER
                 switch (getPeerState()) {
                 case LOOKING:
                     LOG.info("LOOKING");
@@ -973,6 +974,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                     } else {
                         try {
                             setBCVote(null);
+                            // lookForLeader其实就是调用了FastLeaderSelection算法，直到选举成功才回返回
                             setCurrentVote(makeLEStrategy().lookForLeader());
                         } catch (Exception e) {
                             LOG.warn("Unexpected exception", e);
